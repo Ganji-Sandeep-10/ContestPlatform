@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createContest,getContest,postMcq,submitMcq,postDsa } from "../controller/contests.controller";
+import { createContest, getContest, postMcq, submitMcq, postDsa, getLeaderboard } from "../controller/contests.controller";
 import { authMiddleware } from "../middleware/auth.middleware";
 
 const router = Router();
@@ -9,6 +9,7 @@ router.get("/:contestId",authMiddleware,getContest);
 router.post("/:contestId/mcq",authMiddleware,postMcq);
 router.post("/:contestId/mcq/:questionId/submit",authMiddleware,submitMcq);
 router.post("/:contestId/dsa",authMiddleware,postDsa);
+router.get("/:contestId/leaderboard", authMiddleware, getLeaderboard);
 
 
 export default router;

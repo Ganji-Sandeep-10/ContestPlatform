@@ -21,11 +21,19 @@ export const createContestSchema = z.object({
 });
 
 export const postMcqSchema = z.object({
-  questionText: z.string().min(1),
-  options: z.array(z.string()).min(2),
-  correctOptionIndex: z.number().int().nonnegative(),
-  points: z.number().int().positive().default(1),
-});
+    questionText: z.string().min(1),
+    options: z.array(z.string()).min(2),
+    correctOptionIndex: z.number().int().nonnegative(),
+    points: z.number().int().positive().default(1),
+  })
+  .refine(
+    data => data.correctOptionIndex < data.options.length,
+    {
+      message: "INVALID_REQUEST",
+      path: ["correctOptionIndex"],
+    }
+  );
+
 
 export const submitMcqSchema = z.object({
   selectedOptionIndex: z.number().int().nonnegative(),
@@ -46,3 +54,8 @@ export const postDsaSchema=z.object({
   memoryLimit: z.number().int().nonnegative(),
   testCases: z.array(testcaseSchema).min(1),
 })
+
+export const submitProblemSchema = z.object({
+  code: z.string().min(1),
+  language: z.string().min(1),
+});

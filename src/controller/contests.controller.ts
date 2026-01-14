@@ -91,10 +91,10 @@ export const getContest = async (req: AuthenticatedRequest, res: Response) => {
 
   const contestId = Number(req.params.contestId);
   if (!contestId || isNaN(contestId)) {
-    return res.status(400).json({
+    return res.status(404).json({
       success: false,
       data: null,
-      error: "INVALID_REQUEST",
+      error: "CONTEST_NOT_FOUND",
     });
   }
 
@@ -255,13 +255,7 @@ export const submitMcq = async (req: AuthenticatedRequest, res: Response) => {
       error: "UNAUTHORIZED",
     });
   }
-  if (req.user.role === "creator") {
-    return res.status(403).json({
-      success: false,
-      data: null,
-      error: "FORBIDDEN",
-    });
-  }
+
   const parsed = submitMcqSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -279,6 +273,16 @@ export const submitMcq = async (req: AuthenticatedRequest, res: Response) => {
         success: false,
         data: null,
         error: "CONTEST_NOT_FOUND",
+      });
+    }
+    if (
+      req.user.role === "creator" &&
+      contest.creatorId === req.user.userId
+    ) {
+      return res.status(403).json({
+        success: false,
+        data: null,
+        error: "FORBIDDEN",
       });
     }
     const now = new Date();
@@ -406,14 +410,6 @@ export const postDsa = async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
-    if (new Date() >= contest.startTime) {
-      return res.status(400).json({
-        success: false,
-        data: null,
-        error: "CONTEST_ALREADY_STARTED",
-      });
-    }
-
     const result = await prisma.$transaction(async (tx) => {
       const dsa = await tx.dsaProblem.create({
         data: {
@@ -456,4 +452,153 @@ export const postDsa = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-  
+export const getLeaderboard = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      data: null,
+      error: "UNAUTHORIZED",
+    });
+  }
+
+  const contestId = Number(req.params.contestId);
+
+  if (Number.isNaN(contestId)) {
+    return res.status(404).json({
+      success: false,
+      data: null,
+      error: "CONTEST_NOT_FOUND",
+    });
+  }
+
+
+  try {
+    const contest = await prisma.contest.findUnique({
+      where: { id: contestId },
+    });
+
+    if (!contest) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        error: "CONTEST_NOT_FOUND",
+      });
+    }
+
+    // MCQ POINTS PER USER
+
+    const mcqAgg = await prisma.mcqSubmission.groupBy({
+      by: ["userId"],
+      where: {
+        question: {
+          contestId,
+        },
+      },
+      _sum: {
+        pointsEarned: true,
+      },
+    });
+
+    const mcqPointsMap = new Map<number, number>();
+    for (const row of mcqAgg) {
+      mcqPointsMap.set(row.userId, row._sum.pointsEarned ?? 0);
+    }
+
+    // DSA BEST POINTS PER (USER, PROBLEM)
+
+    const dsaAgg = await prisma.dsaSubmission.groupBy({
+      by: ["userId", "problemId"],
+      where: {
+        problem: {
+          contestId,
+        },
+      },
+      _max: {
+        pointsEarned: true,
+      },
+    });
+
+    // Sum best DSA scores per user
+
+    const dsaPointsMap = new Map<number, number>();
+    for (const row of dsaAgg) {
+      const prev = dsaPointsMap.get(row.userId) ?? 0;
+      dsaPointsMap.set(
+        row.userId,
+        prev + (row._max.pointsEarned ?? 0)
+      );
+    }
+
+    // MERGE TOTAL POINTS
+
+    const userIds = new Set<number>([
+      ...mcqPointsMap.keys(),
+      ...dsaPointsMap.keys(),
+    ]);
+
+    if (userIds.size === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        error: null,
+      });
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        id: { in: Array.from(userIds) },
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    const leaderboardRaw = users.map(u => {
+      const mcq = mcqPointsMap.get(u.id) ?? 0;
+      const dsa = dsaPointsMap.get(u.id) ?? 0;
+
+      return {
+        userId: u.id,
+        name: u.name,
+        totalPoints: mcq + dsa,
+      };
+    });
+
+    // SORT + ASSIGN RANKS
+
+    leaderboardRaw.sort(
+      (a, b) => b.totalPoints - a.totalPoints
+    );
+
+    let currentRank = 1;
+    let lastPoints: number | null = null;
+
+    const leaderboard = leaderboardRaw.map((entry, index) => {
+      if (lastPoints !== null && entry.totalPoints < lastPoints) {
+        currentRank = index + 1;
+      }
+      lastPoints = entry.totalPoints;
+
+      return {
+        ...entry,
+        rank: currentRank,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: leaderboard,
+      error: null,
+    });
+  } catch {
+    return res.status(500).json({
+      success: false,
+      data: null,
+      error: "INTERNAL_SERVER_ERROR",
+    });
+  }
+};
