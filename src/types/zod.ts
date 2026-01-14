@@ -19,3 +19,30 @@ export const createContestSchema = z.object({
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
 });
+
+export const postMcqSchema = z.object({
+  questionText: z.string().min(1),
+  options: z.array(z.string()).min(2),
+  correctOptionIndex: z.number().int().nonnegative(),
+  points: z.number().int().positive().default(1),
+});
+
+export const submitMcqSchema = z.object({
+  selectedOptionIndex: z.number().int().nonnegative(),
+});
+
+const testcaseSchema = z.object({
+  input: z.string(),
+  expectedOutput: z.string(),
+  isHidden:z.boolean().default(false)
+})
+
+export const postDsaSchema=z.object({
+  title:z.string().min(1),
+  description:z.string().min(1),
+  tags:z.array(z.string()).min(1),
+  points:z.number().int().nonnegative(),
+  timeLimit: z.number().int().nonnegative(),
+  memoryLimit: z.number().int().nonnegative(),
+  testCases: z.array(testcaseSchema).min(1),
+})
