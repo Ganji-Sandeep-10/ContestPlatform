@@ -129,11 +129,15 @@ export const submitProblem = async (
 
         const totalTestCases = problem.testCases.length;
 
-        // Judge (mock for now)
-        const judgeResult = judgeSolution(
+        const judgeResult = await judgeSolution(
             parsed.data.code,
-            totalTestCases
+            problem.testCases.map(tc => ({
+                input: tc.input,
+                expectedOutput: tc.expectedOutput,
+            })),
+            problem.timeLimit
         );
+
 
 
         const pointsEarned = Math.floor(

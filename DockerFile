@@ -1,0 +1,9 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# No network, minimal attack surface
+RUN adduser -D runner
+USER runner
+
+CMD ["node"]
