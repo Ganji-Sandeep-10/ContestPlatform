@@ -8,8 +8,9 @@ bun install
 
 Build DockerFile once:
 
+```bash
 docker build -t code-runner-node 
-
+```
 
 To run:
 
